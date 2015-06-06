@@ -1,0 +1,99 @@
+---
+title: "ML Course Project"
+author: "Andra Mertilos"
+date: "4-6-2015"
+output: html_document
+---
+
+Background
+===========
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+Data collection
+===============
+
+First, we specify the data sources and the data destionations for the data sets we will be using in the project.
+
+
+```{r}
+train_ds <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_ds <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training.set <- 'ds_training.csv'
+test.set    <- 'ds_test.csv'
+```
+
+Then we download the data and create data frames for each data set
+
+```{r}
+download.file(train_ds, training.set, method='wget')
+download.file(test_ds,  test.set,  method='wget')
+test <- read.csv("/home/rstudio/PLM/ds_test.csv")
+training <- read.csv("/home/rstudio/PLM/ds_training.csv")
+```
+
+Data processing & preparing
+===========================
+
+1) Clean the data and remove NA's from both training & test data sets
+
+```{r}
+training <- training[, colSums(is.na(training)) == 0] 
+test <- test[, colSums(is.na(test)) == 0]
+```
+
+2) Remove un-useful columns from both data sets
+```{r}
+classe <- training$classe
+trainRemove <- grepl("^X|timestamp|window", names(training))
+training <- training[, !trainRemove]
+trainCleaned <- training[, sapply(training, is.numeric)]
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(test))
+test <- test[, !testRemove]
+testCleaned <- test[, sapply(test, is.numeric)]
+```
+
+3) Partition training data set in 70% pure training and 30% for validation purposes
+```{r}
+library(caret)
+A <- createDataPartition(trainCleaned$classe, p=0.70, list=F)
+trainData <- trainCleaned[A, ]
+validdata <- trainCleaned[-A, ]
+```
+
+Machine Learning Algorithm 
+===========================
+
+We apply the random forests algorithm to select the most important variables in our prediction. The method used is cross-validation with a 5 level.
+
+1) Algorithm results on training data set
+```{r}
+library(randomForest)
+control <- trainControl(method="cv", 5)
+random_forest <- train(classe ~ ., data=trainData, method="rf", trControl=control)
+random_forest
+```
+2) Confusion matrix for validation data set
+```{r}
+validate <- predict(random_forest, validdata)
+matrix <- confusionMatrix(validdata$classe, validate)
+matrix
+```
+3) Model accuracy
+```{r}
+matrix$overall[1]
+```
+4) Out of sample error
+```{r}
+sample_error <- 1 - as.numeric(confusionMatrix(validdata$classe, validate)$overall[1])
+sample_error
+```
+
+Applying algorithm on test data set
+===================================
+
+```{r}
+submission <- predict(random_forest, testCleaned[, -length(names(testCleaned))])
+submission
+```
